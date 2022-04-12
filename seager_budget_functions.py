@@ -1,5 +1,5 @@
 import numpy as np 
-# Functions used in temperature budget calculations
+# Functions used in zonal-mean, time-mean temperature budget calculations
 # Constants
 a = 6400e3 # Earth radius [m]
 R = 8.31 # molar gas constant [J/K/mol]
