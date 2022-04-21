@@ -1,9 +1,38 @@
 import numpy as np 
+import xarray as xr
+from datetime import datetime
 
 # Constants
 a = 6400e3 # Earth radius [m]
 R = 8.31 # molar gas constant [J/K/mol]
 cp = 0.02914e3 # molar specific heat [J/kg/mol]
+
+
+def component_attrs(**kwargs):
+    # Update long-name for each component
+    
+    
+    attrs = {'meridional':'{comp} heat flux convergence by the {term_name}',
+             'vertical':'{comp} heat flux convergence by the {term_name}',
+             'adiabatic':'Heating due to adiabatic work done by the {term_name}',
+             'total':'Total temperature tendency due to the {term_name}'
+             }
+    
+    for key in kwargs.keys():
+
+        if key != 'term_name':
+            kwargs[key].attrs['long_name'] = attrs[key].format(comp=key, term_name=kwargs['term_name'])
+    
+    
+    
+
+# define global attributes
+glob_attrs = {'creation_date':str(datetime.now()), 
+         'author':'Rhidian Thomas', 
+         'email':'rhidian.thomas@physics.ox.ac.uk',
+         'units':'K/s'}
+
+
 
 # REMEMEBR P UNITS ARE HPA NOT PA - FACTOR OF 100 DIFFERENCE!
 
@@ -41,9 +70,16 @@ def temperature_budget_MMC_adiabatic(wap_time_mean_zon_mean, ta_time_mean_zon_me
     
 
 
+    
+def temperature_budget_MMC(va_time_mean, ta_time_mean, wap_time_mean):
 
-def temperature_budget_MMC(va_time_mean, ta_time_mean, wap_time_mean,return_components=False):
+    
+    # Long form term name
+    term_name = 'MMC'
 
+    # Add this term's name to attributes
+    attrs = glob_attrs.copy()
+    attrs['long_name'] = term_name
                                                      
     # Calculate zonal means
     va_time_mean_zon_mean  = va_time_mean.mean('longitude')
@@ -51,6 +87,7 @@ def temperature_budget_MMC(va_time_mean, ta_time_mean, wap_time_mean,return_comp
     wap_time_mean_zon_mean = wap_time_mean.mean('longitude')
 
 
+    # Calculate budget terms
     term1 = temperature_budget_MMC_meridional_advection(va_time_mean_zon_mean=va_time_mean_zon_mean,
                                                         ta_time_mean_zon_mean=ta_time_mean_zon_mean)
 
@@ -60,18 +97,22 @@ def temperature_budget_MMC(va_time_mean, ta_time_mean, wap_time_mean,return_comp
     term3 = temperature_budget_MMC_adiabatic(wap_time_mean_zon_mean=wap_time_mean_zon_mean,
                                              ta_time_mean_zon_mean=ta_time_mean_zon_mean)                                               
                                   
-    # Add up the terms:
+    # Sum of the terms
     total = term1 + term2 + term3
     
-    if return_components:
-        result_dict = {'total' : total, 
+    # Modifies long names in-place
+    component_attrs(meridional=term1, vertical=term2, adiabatic=term3, total=total, term_name=term_name)
+    
+    # Return result as a DataSet
+    result = xr.Dataset(data_vars={
+                        'total' : total,
                        'meridional' : term1, 
                        'vertical' : term2, 
-                       'adiabatic' : term3}
-    else:
-        result_dict = {'total ': total}
+                       'adiabatic' : term3},
+    attrs=attrs) 
+    
+    return result
 
-    return result_dict
 
                                                 
 
@@ -124,9 +165,16 @@ def temperature_budget_stat_waves_adiabatic(wap_time_mean_star_ta_time_mean_star
 
 
 
-def temperature_budget_stat_waves(va_time_mean, ta_time_mean, wap_time_mean, return_components=False, zm=True):
-    
+def temperature_budget_stat_waves(va_time_mean, ta_time_mean, wap_time_mean, zm=True):
 
+    
+    ### Long form term name
+    term_name = 'stationary waves'
+                                       
+    # Add this term's name to attributes
+    attrs = glob_attrs.copy()
+    attrs['long_name'] = term_name
+              
     # Calculate zonal means
     va_time_mean_zon_mean  = va_time_mean.mean('longitude')
     ta_time_mean_zon_mean  = ta_time_mean.mean('longitude')
@@ -141,6 +189,8 @@ def temperature_budget_stat_waves(va_time_mean, ta_time_mean, wap_time_mean, ret
     va_time_mean_star_ta_time_mean_star   = va_time_mean_star*ta_time_mean_star
     wap_time_mean_star_ta_time_mean_star  = wap_time_mean_star*ta_time_mean_star
 
+
+    # Calculate budget terms
     term1 = temperature_budget_stat_waves_meridional(va_time_mean_star_ta_time_mean_star=va_time_mean_star_ta_time_mean_star,
                                                  zm=zm)
     
@@ -149,22 +199,22 @@ def temperature_budget_stat_waves(va_time_mean, ta_time_mean, wap_time_mean, ret
     
     term3 = temperature_budget_stat_waves_adiabatic(wap_time_mean_star_ta_time_mean_star=wap_time_mean_star_ta_time_mean_star,
                                                  zm=zm)
-    
-    # Add up the terms:
+
+    # Sum of the terms:
     total = term1 + term2 + term3
     
+    # Modifies long names in-place
+    component_attrs(meridional=term1, vertical=term2, adiabatic=term3, total=total, term_name=term_name)
     
-    if return_components:
-        result_dict = {'total' : total, 
+    # Return result as a DataSet
+    result = xr.Dataset(data_vars={
+                        'total' : total,
                        'meridional' : term1, 
                        'vertical' : term2, 
-                       'adiabatic' : term3}
-    else:
-        result_dict = {'total ': total}    
+                       'adiabatic' : term3},
+    attrs=attrs) 
     
-    return result_dict
-
-
+    return result
 
         
 #%% Transient eddies
@@ -214,40 +264,47 @@ def temperature_budget_transient_eddies_adiabatic(wap_prime_ta_prime_time_mean, 
     return check_result_shape(result,zm)
 
 
+       
 
+def temperature_budget_transient_eddies(va_prime, ta_prime, wap_prime, zm=True):
 
-def temperature_budget_transient_eddies(va_prime, ta_prime, wap_prime, return_components=False, zm=True):
-
-                                                                
-    lats = np.deg2rad(va_prime.latitude)
-    p = va_prime.level
-
-
-    ##### save some time later #####
+    
+    ### Long form term name
+    term_name = 'transient eddies'
+    
+    # Add this term's name to attributes
+    attrs = glob_attrs.copy()
+    attrs['long_name'] = term_name
+                                                     
+    # Flux terms:
     va_prime_ta_prime_time_mean  = (va_prime*ta_prime).mean('time')
     wap_prime_ta_prime_time_mean = (wap_prime*ta_prime).mean('time')
-    ################################
 
+
+    # Calculate budget terms
     term1 = temperature_budget_transient_eddies_meridional(va_prime_ta_prime_time_mean=va_prime_ta_prime_time_mean,
                                                  zm=zm)
     term2 = temperature_budget_transient_eddies_vertical(wap_prime_ta_prime_time_mean=wap_prime_ta_prime_time_mean,
                                                  zm=zm)
     term3 = temperature_budget_transient_eddies_adiabatic(wap_prime_ta_prime_time_mean=wap_prime_ta_prime_time_mean,
                                                  zm=zm)
-
-    # Add up the terms:
+    
+    # Sum of the terms:
     total = term1 + term2 + term3
     
-    if return_components:
-        result_dict = {'total' : total, 
+    # Modifies long names in-place
+    component_attrs(meridional=term1, vertical=term2, adiabatic=term3, total=total, term_name=term_name)
+    
+    # Return result as a DataSet
+    result = xr.Dataset(data_vars={
+                        'total' : total,
                        'meridional' : term1, 
                        'vertical' : term2, 
-                       'adiabatic' : term3}
-    else:
-        result_dict = {'total ': total}    
+                       'adiabatic' : term3},
+    attrs=attrs) 
     
-    return result_dict                             
-                                                                
+    return result
+
 
 
 def check_result_shape(result,zm):
